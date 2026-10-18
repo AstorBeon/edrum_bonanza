@@ -33,6 +33,7 @@ from typing import Dict, List, Optional, Tuple
 import platform
 import threading
 import queue
+from PIL import Image, ImageTk
 
 
 import tkinter as tk
@@ -256,20 +257,6 @@ class CameraManager:
 class CameraPreview(ttk.LabelFrame):
     def __init__(self, parent, camera_manager, title="Camera Preview"):
         super().__init__(parent, text=title, padding=10)
-        self.preview = tk.Label(
-            self,
-            text="Camera",
-            bg="#15171a",
-            fg="white",
-            anchor="center"
-        )
-
-        self.preview.pack(
-            fill="both",
-            expand=True,
-            padx=5,
-            pady=10
-        )
         self.manager = camera_manager
         self.running = False
         self.after_id = None
@@ -313,8 +300,6 @@ class CameraPreview(ttk.LabelFrame):
             text="Refresh Cameras",
             command=self.refresh_cameras
         ).pack(fill="x")
-
-        cameras = self.manager.get_cameras()
 
         self.set_camera_list(
             self.manager.cached_cameras or []
@@ -380,7 +365,7 @@ class CameraPreview(ttk.LabelFrame):
 
     def change_camera(self, event=None):
         self.stop()
-        self.start()
+        #self.start()
 
     def set_camera_list(self, cameras):
         values = [
@@ -691,7 +676,7 @@ class MidiEngine:
         if getattr(msg, "type", "") == "note_on" and getattr(msg, "velocity", 0) > 0:
             pad = find_pad_for_note(msg.note)
             if pad:
-                self.on_hit(pad, int(msg.velocity), time.monotonic())
+                self.on_hit(pad, int(msg.velocity), time.monotonic(), int(msg.note))
 
     def close(self):
         if self.port is not None:
@@ -777,6 +762,21 @@ def render_hits_to_wav(hits: List[Hit], set_name: str, output: Path) -> None:
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
+
+        icon_path = Path(__file__).resolve().parent / "drumlogo.png"
+
+        if icon_path.exists():
+            try:
+                image = Image.open(icon_path).convert("RGBA")
+                image = image.resize((256, 256), Image.Resampling.LANCZOS)
+
+                self.app_icon = ImageTk.PhotoImage(image)
+                self.iconphoto(True, self.app_icon)
+
+            except Exception as e:
+                print(f"Could not load application icon: {e}")
+
+
         self.title("Most Basic E-Drum Kit Studio Bonanza")
         self.geometry("900x620")
         self.minsize(800, 560)
@@ -880,7 +880,7 @@ class App(tk.Tk):
         outer.pack(fill="both", expand=True)
 
         ttk.Label(
-            outer, text="E-Drum Kit Studio",
+            outer, text="Most Basic E-Drum Kit Studio Bonanza",
             font=("TkDefaultFont", 28, "bold")
         ).pack(pady=(20, 8))
         ttk.Label(
@@ -897,6 +897,7 @@ class App(tk.Tk):
             ("Record", self.open_record),
             ("Options", self.open_options),
             ("Recordings", self.open_recordings),
+            ("About", self.open_about),
         ]
         for i, (label, command) in enumerate(buttons):
             ttk.Button(
@@ -906,7 +907,7 @@ class App(tk.Tk):
 
         midi_state = "mido not installed"
         if mido is not None:
-            midi_state = f"{len(list_midi_inputs())} MIDI input device(s) detected. {len(list_cameras())} camera(s) detected"
+            midi_state = "Detecting MIDI devices and cameras in background..."
 
 
         ttk.Label(outer, text=midi_state).pack(pady=20)
@@ -1005,7 +1006,7 @@ class App(tk.Tk):
         top.pack(fill="x")
 
         ttk.Label(top, text="MIDI device:").pack(side="left")
-        devices = list_midi_inputs()
+        devices = self.available_midi_devices or []
         device_var = tk.StringVar(
             value=CONFIG.get("default_midi_device", "")
             if CONFIG.get("default_midi_device", "") in devices
@@ -1044,21 +1045,30 @@ class App(tk.Tk):
 
         canvas, shapes, labels = self.create_visualizer(drum_frame)
 
-        # Right side: camera
+        # Right pane exists even when the camera is disabled.
         camera_frame = ttk.Frame(split)
         split.add(camera_frame, weight=1)
 
-        camera_preview = CameraPreview(
+        camera_enabled = tk.BooleanVar(value=False)
+        ttk.Label(camera_frame, text="Camera disabled by default").pack(
+            anchor="w", padx=10, pady=(4, 0)
+        )
+
+        camera_preview = CameraPreview(camera_frame, self.camera_manager)
+        camera_preview.pack(fill="both", expand=True)
+
+        def toggle_test_camera():
+            if camera_enabled.get():
+                camera_preview.start()
+            else:
+                camera_preview.stop()
+
+        ttk.Checkbutton(
             camera_frame,
-            self.camera_manager
-        )
-
-        camera_preview.pack(
-            fill="both",
-            expand=True
-        )
-
-        camera_preview.start()
+            text="Enable camera",
+            variable=camera_enabled,
+            command=toggle_test_camera,
+        ).pack(anchor="w", padx=10, pady=5, before=camera_preview)
 
         def connect():
             ok, msg = self.midi.open(device_var.get())
@@ -1079,7 +1089,7 @@ class App(tk.Tk):
         bottom.pack(fill="x")
         ttk.Button(bottom, text="Connect / Reconnect", command=connect).pack(side="left")
         ttk.Button(bottom, text="Refresh MIDI Devices", command=refresh).pack(side="left", padx=8)
-        ttk.Button(bottom, text="Close", command=lambda: (self.midi.close(), win.destroy())).pack(side="right")
+        ttk.Button(bottom, text="Close", command=lambda: close()).pack(side="right")
 
         # Save references so the MIDI callback can update this window.
         original = self.handle_hit
@@ -1114,6 +1124,38 @@ class App(tk.Tk):
 
         win.protocol("WM_DELETE_WINDOW", close)
 
+    # ------------------
+    # About
+    #-------------------
+    def open_about(self):
+        win = tk.Toplevel(self)
+        win.title("About")
+        win.geometry("500x350")
+        win.resizable(False, False)
+
+        # Main content
+        frame = ttk.Frame(win, padding=20)
+        frame.pack(fill="both", expand=True)
+
+        # Placeholder text — replace later
+        ttk.Label(
+            frame,
+            text="About Most Basic E-Drum Studio Bonanza\n\nCreated for fun by a dude who recently "
+                 " bought e-drum kit. Idea is to handle basic MIDI stuff (adding own sounds, recording"
+                 " yourself while playing and (soon) more, without the hassle of downloading number"
+                 " of overpacked software. Do you want to add something? Is something not working"
+                 " as it should? Let me know: astorbeon@protonmail.com",
+            font=("TkDefaultFont", 11),
+            justify="center",
+            anchor="center"
+        ).pack(fill="both", expand=True)
+
+        # Close button
+        ttk.Button(
+            frame,
+            text="Close",
+            command=win.destroy
+        ).pack(pady=(10, 0))
     # ------------------------------------------------------------------
     # Options
     # ------------------------------------------------------------------
