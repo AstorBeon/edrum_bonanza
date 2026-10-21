@@ -1,39 +1,28 @@
-# -*- mode: python ; coding: utf-8 -*-
-
+# Build on Windows to produce a Windows executable.
+from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis(
-    ['Drum.py'],
+    ["EDrumBonanza.py"],
     pathex=[],
     binaries=[],
-    datas=[('drumlogo.png', '.')],
-    hiddenimports=[],
+    datas=[("default_sounds", "default_sounds"), ("drumlogo.png", ".")]
+    + collect_data_files("imageio_ffmpeg"),
+    hiddenimports=["mido.backends.rtmidi"],
     hookspath=[],
-    hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
-    optimize=0,
 )
 pyz = PYZ(a.pure)
-
 exe = EXE(
     pyz,
     a.scripts,
     a.binaries,
     a.datas,
     [],
-    name='Drum',
+    name="EDrumBonanza",
     debug=False,
-    bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,
     console=False,
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon=['drumlogo.png'],
 )
