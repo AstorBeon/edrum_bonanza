@@ -228,7 +228,9 @@ class Window(W.QMainWindow):
                 "WAV sample",
             ]
         )
-        self.table.horizontalHeader().setSectionResizeMode(W.QHeaderView.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(W.QHeaderView.Interactive)
+        for column, width in enumerate((150, 110, 150, 160, 90, 130, 240)):
+            self.table.setColumnWidth(column, width)
         layout.addWidget(self.table)
         row = W.QHBoxLayout()
         layout.addLayout(row)
@@ -399,6 +401,8 @@ class Window(W.QMainWindow):
             ):
                 item = W.QTableWidgetItem(str(value))
                 if c == 6:
+                    item.setText(Path(str(value)).name if value else "")
+                    item.setToolTip(str(value))
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
                 self.table.setItem(r, c, item)
 
@@ -501,11 +505,21 @@ class Window(W.QMainWindow):
         path, _ = W.QFileDialog.getOpenFileName(self, "Import WAV", "", "WAV (*.wav)")
         if path:
             try:
-                self.settings.data["sets"][self.settings.data["sound_set"]][
-                    self.settings.pads[row]["id"]
-                ] = self.settings.import_sample(path)
+                imported = self.settings.import_sample(path)
+                sound_set = self.settings.data["sound_set"]
+                pad_id = self.settings.pads[row]["id"]
+                self.settings.data["sets"][sound_set][pad_id] = imported
+                # A single-WAV assignment replaces any velocity-layer assignment.
+                # Otherwise the layers would continue to override the new sample.
+                self.settings.data.get("layers", {}).get(sound_set, {}).pop(
+                    pad_id, None
+                )
                 self.settings.save()
                 self.refresh_settings()
+                self.table.setCurrentCell(row, 6)
+                self.statusBar().showMessage(
+                    f"Assigned {Path(path).name} • ready to preview"
+                )
             except Exception as exc:
                 self.error(exc)
 
@@ -530,14 +544,17 @@ class Window(W.QMainWindow):
         )
         table = W.QTableWidget(0, 2)
         table.setHorizontalHeaderLabels(["Maximum velocity", "Managed WAV"])
-        table.horizontalHeader().setSectionResizeMode(W.QHeaderView.Stretch)
+        table.horizontalHeader().setSectionResizeMode(W.QHeaderView.Interactive)
+        table.setColumnWidth(0, 150)
+        table.setColumnWidth(1, 430)
         layout.addWidget(table)
 
         def populate():
             table.setRowCount(len(entries))
             for r, entry in enumerate(entries):
                 table.setItem(r, 0, W.QTableWidgetItem(str(entry["max_velocity"])))
-                item = W.QTableWidgetItem(entry["sample"])
+                item = W.QTableWidgetItem(Path(entry["sample"]).name)
+                item.setToolTip(entry["sample"])
                 item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
                 table.setItem(r, 1, item)
 

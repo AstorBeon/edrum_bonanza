@@ -92,3 +92,51 @@ def test_video_pause_uses_same_clock(tmp_path, monkeypatch):
     window.dirty_take = False
     window.close()
     application.processEvents()
+
+
+def test_assign_wav_replaces_layers_and_loads_named_sample(tmp_path, monkeypatch):
+    from pathlib import Path
+    import wave
+    import numpy as np
+    import pygame
+
+    application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    monkeypatch.setattr(app, "Settings", lambda: Settings(tmp_path / "settings"))
+    monkeypatch.setattr(app.Window, "refresh_devices", lambda self: None)
+    source = tmp_path / "New snare.wav"
+    with wave.open(str(source), "wb") as output:
+        output.setparams((2, 2, 44100, 0, "NONE", "not compressed"))
+        output.writeframes(np.full((4410, 2), 2000, np.int16).tobytes())
+    window = app.Window()
+    pad_id = window.settings.pads[1]["id"]
+    old = window.sample_path(window.settings.pads[1])
+    window.settings.data["layers"] = {
+        "Default": {pad_id: [dict(max_velocity=127, sample=old)]}
+    }
+    window.refresh_settings()
+    window.table.selectRow(1)
+    monkeypatch.setattr(
+        QtWidgets.QFileDialog, "getOpenFileName", lambda *a, **k: (str(source), "WAV")
+    )
+    window.assign_sample()
+    assigned = window.sample_path(window.settings.pads[1], 50)
+    assert Path(assigned).name == source.name
+    assert Path(assigned).read_bytes() == source.read_bytes()
+    assert pad_id not in window.settings.data["layers"]["Default"]
+    assert assigned in window.sounds
+    assert np.max(pygame.sndarray.array(window.sounds[assigned])) == 1999
+    assert window.table.item(1, 6).text() == source.name
+    assert window.table.item(1, 6).toolTip() == assigned
+    header = window.table.horizontalHeader()
+    assert header.sectionResizeMode(6) == QtWidgets.QHeaderView.Interactive
+    window.table.setColumnWidth(6, 360)
+    assert window.table.columnWidth(6) == 360
+    window.start_record()
+    window.simulate(1)
+    window.stop_record()
+    assert window.timeline.hits[0]["sample"] == assigned
+    restored = Settings(tmp_path / "settings")
+    assert restored.sample(pad_id, 50) == assigned
+    window.dirty_take = False
+    window.close()
+    application.processEvents()

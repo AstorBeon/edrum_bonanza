@@ -199,3 +199,18 @@ def test_relocated_bundled_samples_after_pad_rename(tmp_path):
     restored = Settings(tmp_path)
     assert Path(restored.sample(pad["id"])).is_file()
     assert restored.pads[0]["name"] == "Renamed kick"
+
+
+def test_import_keeps_filenames_without_overwriting_same_named_samples(tmp_path):
+    settings = Settings(tmp_path / "settings")
+    source = Path(settings.sample(settings.pads[0]["id"]))
+    first = Path(settings.import_sample(source))
+    second = Path(settings.import_sample(source))
+    assert first.name == second.name == source.name
+    assert first != second
+    assert first.read_bytes() == second.read_bytes() == source.read_bytes()
+    settings.data["sets"]["Default"][settings.pads[0]["id"]] = str(first)
+    settings.export_bundle(tmp_path / "presets.zip")
+    restored = Settings(tmp_path / "restored")
+    restored.import_bundle(tmp_path / "presets.zip")
+    assert Path(restored.sample(settings.pads[0]["id"])).name == source.name

@@ -43,6 +43,9 @@ Python environment at `/workspace/.venvs/edrum`.
   `*` match any channel/device. For Learn, select a row and strike the desired
   physical pad, then click **Save mappings**. Save edits before switching presets.
   Create/delete sound sets, import PCM WAV samples per input, and preview them.
+  Assigning a WAV replaces any velocity layers for that input. Imported samples
+  keep their original filenames in separate managed folders. Sample columns show
+  filenames with full paths on hover; drag column-header borders to resize.
   Velocity layers assigns multiple WAVs with ascending velocity thresholds ending
   at 127. The first threshold at or above the adjusted hit velocity selects the
   sample. Remove all layers to return to the regular WAV assignment.

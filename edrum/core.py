@@ -186,9 +186,9 @@ class Settings:
 
     def import_sample(self, source):
         read_sample(source)  # Reject unreadable or unsupported files before copying.
-        folder = self.root / "samples"
-        folder.mkdir(exist_ok=True)
-        target = folder / (uuid.uuid4().hex + ".wav")
+        folder = self.root / "samples" / uuid.uuid4().hex
+        folder.mkdir(parents=True)
+        target = folder / Path(source).name
         shutil.copy2(source, target)
         return str(target)
 
@@ -200,7 +200,7 @@ class Settings:
             for container, key in self.sample_entries(data):
                 path = Path(container[key])
                 if path.is_file():
-                    name = "samples/" + uuid.uuid4().hex + ".wav"
+                    name = "samples/" + uuid.uuid4().hex + "/" + path.name
                     archive.write(path, name)
                     container[key] = name
                 else:
@@ -222,7 +222,7 @@ class Settings:
                 if not name.startswith("samples/") or ".." in Path(name).parts:
                     raise ValueError("Invalid sample path in archive")
                 with tempfile.TemporaryDirectory() as temp:
-                    sample = Path(temp) / "sample.wav"
+                    sample = Path(temp) / Path(name).name
                     sample.write_bytes(archive.read(name))
                     container[key] = self.import_sample(sample)
             self.data = data
