@@ -218,7 +218,8 @@ class Window(W.QMainWindow):
         self.options_sound_box.currentTextChanged.connect(self.select_sound)
         row = W.QHBoxLayout()
         layout.addLayout(row)
-        self.button("Duplicate preset", self.new_preset, row)
+        self.button("New preset", self.new_preset, row)
+        self.button("Duplicate preset", self.duplicate_preset, row)
         self.button("Delete preset", self.delete_preset, row)
         self.button("Add input", self.add_pad, row)
         self.button("Remove input", self.remove_pad, row)
@@ -255,7 +256,7 @@ class Window(W.QMainWindow):
         layout.addWidget(self.last_hit)
         layout.addWidget(
             W.QLabel(
-                "Select the preset and sound set above. New sound sets copy the selected set and open for editing.\nImported WAV files are copied into application storage.\nKeyboard pads work without MIDI hardware. Save mapping edits before switching presets."
+                "Select the preset and sound set above. New presets start empty; new sound sets have no WAV assignments.\nImported WAV files are copied into application storage.\nKeyboard pads work without MIDI hardware. Save mapping edits before switching presets."
             )
         )
         self.tabs.addTab(page, "Options")
@@ -437,6 +438,12 @@ class Window(W.QMainWindow):
             self.refresh_settings()
 
     def new_preset(self):
+        self.create_preset(duplicate=False)
+
+    def duplicate_preset(self):
+        self.create_preset(duplicate=True)
+
+    def create_preset(self, duplicate=False):
         name, ok = W.QInputDialog.getText(self, "Preset", "New preset name")
         if not ok:
             return
@@ -448,7 +455,9 @@ class Window(W.QMainWindow):
                 f'A preset named "{name}" already exists. Select it from the dropdown to edit it.'
             )
         if name:
-            self.settings.data["presets"][name] = copy.deepcopy(self.settings.pads)
+            self.settings.data["presets"][name] = (
+                copy.deepcopy(self.settings.pads) if duplicate else []
+            )
             self.select_preset(name)
 
     def delete_preset(self):
@@ -517,14 +526,8 @@ class Window(W.QMainWindow):
                 f'A sound set named "{name}" already exists. Select it from the dropdown to edit it.'
             )
         if name:
-            self.settings.data["sets"][name] = copy.deepcopy(
-                self.settings.data["sets"][self.settings.data["sound_set"]]
-            )
-            self.settings.data.setdefault("layers", {})[name] = copy.deepcopy(
-                self.settings.data.get("layers", {}).get(
-                    self.settings.data["sound_set"], {}
-                )
-            )
+            self.settings.data["sets"][name] = {}
+            self.settings.data.setdefault("layers", {})[name] = {}
             self.select_sound(name)
 
     def delete_sound_set(self):

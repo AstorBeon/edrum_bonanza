@@ -203,3 +203,54 @@ def test_options_selectors_create_and_edit_independent_sets(tmp_path, monkeypatc
     assert restored.sample(pad["id"]) == imported
     window.close()
     application.processEvents()
+
+
+def test_new_presets_and_sound_sets_start_empty(tmp_path, monkeypatch):
+    application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    root = tmp_path / "settings"
+    monkeypatch.setattr(app, "Settings", lambda: Settings(root))
+    monkeypatch.setattr(app.Window, "refresh_devices", lambda self: None)
+    window = app.Window()
+    original = [dict(pad) for pad in window.settings.pads]
+    original_samples = dict(window.settings.data["sets"]["Default"])
+    first_pad = original[0]["id"]
+    window.settings.data["layers"] = {
+        "Default": {
+            first_pad: [dict(max_velocity=127, sample=original_samples[first_pad])]
+        }
+    }
+    monkeypatch.setattr(
+        QtWidgets.QInputDialog, "getText", lambda *a, **k: ("Blank sounds", True)
+    )
+    window.new_sound_set()
+    assert window.table.rowCount() == len(original)
+    assert all(window.table.item(row, 6).text() == "" for row in range(len(original)))
+    assert window.settings.data["sets"]["Blank sounds"] == {}
+    assert window.settings.data["layers"]["Blank sounds"] == {}
+    assert not window.sounds
+    assert window.settings.data["sets"]["Default"] == original_samples
+    assert window.settings.data["layers"]["Default"][first_pad]
+    monkeypatch.setattr(
+        QtWidgets.QInputDialog, "getText", lambda *a, **k: ("Blank kit", True)
+    )
+    window.new_preset()
+    assert window.table.rowCount() == 0
+    assert window.settings.pads == []
+    assert window.options_preset_box.currentText() == "Blank kit"
+    restored = Settings(root)
+    assert restored.pads == []
+    assert restored.data["sets"]["Blank sounds"] == {}
+    window.add_pad()
+    assert window.table.rowCount() == 1
+    assert window.table.item(0, 6).text() == ""
+    window.options_preset_box.setCurrentText("Default")
+    monkeypatch.setattr(
+        QtWidgets.QInputDialog, "getText", lambda *a, **k: ("Copied kit", True)
+    )
+    window.duplicate_preset()
+    assert window.settings.pads == original
+    assert window.settings.pads is not window.settings.data["presets"]["Default"]
+    window.settings.pads[0]["name"] = "Different kick"
+    assert window.settings.data["presets"]["Default"][0]["name"] == original[0]["name"]
+    window.close()
+    application.processEvents()
