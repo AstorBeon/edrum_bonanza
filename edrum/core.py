@@ -138,6 +138,12 @@ class Settings:
             ):
                 raise ValueError("Invalid sound set")
 
+        for levels in data.get("sound_volumes", {}).values():
+            if not isinstance(levels, dict) or any(
+                not 0 <= float(level) <= 2 for level in levels.values()
+            ):
+                raise ValueError("Sound-set volumes must be between 0% and 200%")
+
         for layers in data.get("layers", {}).values():
             for entries in layers.values():
                 limits = [entry["max_velocity"] for entry in entries]
@@ -152,6 +158,13 @@ class Settings:
                     )
                 if any(not isinstance(entry["sample"], str) for entry in entries):
                     raise ValueError("Invalid layer sample")
+
+    def sound_volume(self, pad_id):
+        return (
+            self.data.get("sound_volumes", {})
+            .get(self.data["sound_set"], {})
+            .get(pad_id, 1.0)
+        )
 
     def sample(self, pad_id, velocity=127):
         layers = (

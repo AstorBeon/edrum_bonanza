@@ -254,3 +254,74 @@ def test_new_presets_and_sound_sets_start_empty(tmp_path, monkeypatch):
     assert window.settings.data["presets"]["Default"][0]["name"] == original[0]["name"]
     window.close()
     application.processEvents()
+
+
+def test_per_sound_set_volume_controls_playback_recording_and_persistence(
+    tmp_path, monkeypatch
+):
+    import wave
+    import numpy as np
+    import pygame
+    from edrum.core import read_sample
+
+    application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    root = tmp_path / "settings"
+    monkeypatch.setattr(app, "Settings", lambda: Settings(root))
+    monkeypatch.setattr(app.Window, "refresh_devices", lambda self: None)
+    window = app.Window()
+    source = tmp_path / "quiet.wav"
+    with wave.open(str(source), "wb") as output:
+        output.setparams((2, 2, 44100, 0, "NONE", "not compressed"))
+        output.writeframes(np.full((44100, 2), 2000, np.int16).tobytes())
+    pad_id = window.settings.pads[0]["id"]
+    window.settings.data["sets"]["Default"][pad_id] = str(source)
+    window.refresh_settings()
+    window.volume.setValue(100)
+    window.velocity.setValue(127)
+    window.table.cellWidget(0, 7).setValue(50)
+    assert window.settings.sound_volume(pad_id) == 0.5
+    assert window.settings.sound_volume(window.settings.pads[1]["id"]) == 1.0
+    window.start_record()
+    window.simulate(0)
+    window.stop_record()
+    assert window.timeline.hits[0]["gain"] == 0.5
+    assert window.channels[pad_id].get_volume() == 0.5
+    window.timeline.render(tmp_path / "soft.wav")
+    soft = np.max(np.abs(read_sample(tmp_path / "soft.wav")))
+    window.dirty_take = False
+    monkeypatch.setattr(
+        QtWidgets.QInputDialog, "getText", lambda *a, **k: ("Loud set", True)
+    )
+    window.new_sound_set()
+    assert window.table.cellWidget(0, 7).value() == 100
+    window.settings.data["sets"]["Loud set"][pad_id] = str(source)
+    window.refresh_settings()
+    window.table.cellWidget(0, 7).setValue(200)
+    window.start_record()
+    window.simulate(0)
+    window.stop_record()
+    assert window.timeline.hits[0]["gain"] == 2.0
+    assert np.max(pygame.sndarray.array(window.channels[pad_id].get_sound())) > 3900
+    window.timeline.render(tmp_path / "loud.wav")
+    loud = np.max(np.abs(read_sample(tmp_path / "loud.wav")))
+    assert 3.98 < loud / soft < 4.02
+    window.options_sound_box.setCurrentText("Default")
+    assert window.table.cellWidget(0, 7).value() == 50
+    window.table.cellWidget(0, 7).setValue(0)
+    window.dirty_take = False
+    window.start_record()
+    window.simulate(0)
+    window.stop_record()
+    window.timeline.render(tmp_path / "muted.wav")
+    assert not np.any(read_sample(tmp_path / "muted.wav"))
+    restored = Settings(root)
+    assert restored.sound_volume(pad_id) == 0
+    window.settings.export_bundle(tmp_path / "volumes.zip")
+    imported = Settings(tmp_path / "imported")
+    imported.import_bundle(tmp_path / "volumes.zip")
+    assert imported.sound_volume(pad_id) == 0
+    imported.data["sound_set"] = "Loud set"
+    assert imported.sound_volume(pad_id) == 2
+    window.dirty_take = False
+    window.close()
+    application.processEvents()

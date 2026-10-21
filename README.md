@@ -48,6 +48,11 @@ Python environment at `/workspace/.venvs/edrum`.
   `*` match any channel/device. For Learn, select a row and strike the desired
   physical pad, then click **Save mappings**. Save edits before switching presets.
   Create/delete sound sets, import PCM WAV samples per input, and preview them.
+  The Sound volume column adjusts each drum/cymbal independently for the selected
+  sound set: 0% mutes, 100% is original volume, and up to 200% boosts it. Changes
+  save immediately and apply to previews, playing and WAV/MP4 recordings. Each
+  new set starts at 100%; portable bundles retain volume settings. Sound volume
+  multiplies the preset gain, master volume and MIDI velocity.
   Assigning a WAV replaces any velocity layers for that input. Imported samples
   keep their original filenames in separate managed folders. Sample columns show
   filenames with full paths on hover; drag column-header borders to resize.

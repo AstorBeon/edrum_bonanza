@@ -225,20 +225,21 @@ class Window(W.QMainWindow):
         self.button("Remove input", self.remove_pad, row)
         self.button("Learn selected input", self.learn, row)
         self.button("Save mappings", self.save_table, row)
-        self.table = W.QTableWidget(0, 7)
+        self.table = W.QTableWidget(0, 8)
         self.table.setHorizontalHeaderLabels(
             [
                 "Name",
                 "Note (0–127)",
                 "Channel (0 = any)",
                 "Device (* = any)",
-                "Gain (0–4)",
+                "Preset gain (0–4)",
                 "Sensitivity (0.1–4)",
                 "WAV sample",
+                "Sound volume",
             ]
         )
         self.table.horizontalHeader().setSectionResizeMode(W.QHeaderView.Interactive)
-        for column, width in enumerate((150, 110, 150, 160, 90, 130, 240)):
+        for column, width in enumerate((150, 110, 150, 160, 120, 130, 240, 135)):
             self.table.setColumnWidth(column, width)
         layout.addWidget(self.table)
         row = W.QHBoxLayout()
@@ -424,6 +425,26 @@ class Window(W.QMainWindow):
                     item.setToolTip(str(value))
                     item.setFlags(item.flags() & ~QtCore.Qt.ItemIsEditable)
                 self.table.setItem(r, c, item)
+            volume = W.QSpinBox()
+            volume.setRange(0, 200)
+            volume.setSuffix(" %")
+            volume.setSingleStep(5)
+            volume.setValue(round(self.settings.sound_volume(p["id"]) * 100))
+            volume.setToolTip(
+                "Volume for this drum in the selected sound set. 0% mutes; 100% is original; changes save immediately."
+            )
+            volume.valueChanged.connect(
+                lambda value, set_name=self.settings.data["sound_set"], pad_id=p[
+                    "id"
+                ]: self.save_sound_volume(set_name, pad_id, value)
+            )
+            self.table.setCellWidget(r, 7, volume)
+
+    def save_sound_volume(self, set_name, pad_id, percent):
+        self.settings.data.setdefault("sound_volumes", {}).setdefault(set_name, {})[
+            pad_id
+        ] = (percent / 100)
+        self.settings.save()
 
     def select_preset(self, name):
         if name:
@@ -528,12 +549,16 @@ class Window(W.QMainWindow):
         if name:
             self.settings.data["sets"][name] = {}
             self.settings.data.setdefault("layers", {})[name] = {}
+            self.settings.data.setdefault("sound_volumes", {})[name] = {}
             self.select_sound(name)
 
     def delete_sound_set(self):
         if len(self.settings.data["sets"]) < 2:
             return self.error("Keep at least one sound set.")
         self.settings.data.get("layers", {}).pop(self.settings.data["sound_set"], None)
+        self.settings.data.get("sound_volumes", {}).pop(
+            self.settings.data["sound_set"], None
+        )
         del self.settings.data["sets"][self.settings.data["sound_set"]]
         self.select_sound(next(iter(self.settings.data["sets"])))
 
@@ -866,7 +891,12 @@ class Window(W.QMainWindow):
 
     def hit(self, pad, device, channel, note, velocity):
         velocity = min(127, max(1, round(velocity * pad["sensitivity"])))
-        gain = pad["gain"] * self.volume.value() / 100
+        gain = (
+            pad["gain"]
+            * self.settings.sound_volume(pad["id"])
+            * self.volume.value()
+            / 100
+        )
         if pad["note"] == 42:
             for opened in self.settings.pads:
                 if opened["note"] == 46:
