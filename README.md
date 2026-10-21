@@ -38,7 +38,9 @@ Python environment at `/workspace/.venvs/edrum`.
   Existing files require the native save-dialog overwrite confirmation. Use
   Output folder to remember a preferred location. MP4 includes synthesized drum
   audio, not microphone audio. WAV retains sample tails; MP4 ends with the video.
-- **Options:** duplicate/delete presets, add/remove inputs and edit pad names,
+- **Options:** select the kit preset and sound set directly using the dropdowns
+  at the top (synchronized with Test). New sound sets copy the current set and
+  become selected immediately. Duplicate/delete presets, add/remove inputs and edit pad names,
   MIDI notes, device names, channels, gain and sensitivity. Channel `0` and device
   `*` match any channel/device. For Learn, select a row and strike the desired
   physical pad, then click **Save mappings**. Save edits before switching presets.

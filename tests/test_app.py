@@ -140,3 +140,66 @@ def test_assign_wav_replaces_layers_and_loads_named_sample(tmp_path, monkeypatch
     window.dirty_take = False
     window.close()
     application.processEvents()
+
+
+def test_options_selectors_create_and_edit_independent_sets(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    application = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
+    monkeypatch.setattr(app, "Settings", lambda: Settings(tmp_path / "settings"))
+    monkeypatch.setattr(app.Window, "refresh_devices", lambda self: None)
+    window = app.Window()
+    window.tabs.setCurrentIndex(2)
+    assert window.options_sound_box.currentText() == "Default"
+    pad = window.settings.pads[0]
+    original = window.sample_path(pad)
+    monkeypatch.setattr(
+        QtWidgets.QInputDialog, "getText", lambda *a, **k: ("  Custom sounds  ", True)
+    )
+    window.new_sound_set()
+    assert (
+        window.options_sound_box.currentText()
+        == window.sound_box.currentText()
+        == "Custom sounds"
+    )
+    assert (
+        window.settings.data["sets"]["Custom sounds"]
+        is not window.settings.data["sets"]["Default"]
+    )
+    window.table.selectRow(0)
+    monkeypatch.setattr(
+        QtWidgets.QFileDialog, "getOpenFileName", lambda *a, **k: (original, "WAV")
+    )
+    window.assign_sample()
+    imported = window.sample_path(pad)
+    assert imported != original and Path(imported).is_file()
+    window.options_sound_box.setCurrentText("Default")
+    assert window.sound_box.currentText() == "Default"
+    assert window.sample_path(pad) == original
+    window.sound_box.setCurrentText("Custom sounds")
+    assert window.options_sound_box.currentText() == "Custom sounds"
+    assert window.sample_path(pad) == imported
+    monkeypatch.setattr(
+        QtWidgets.QInputDialog, "getText", lambda *a, **k: ("Second kit", True)
+    )
+    window.new_preset()
+    assert (
+        window.options_preset_box.currentText()
+        == window.preset_box.currentText()
+        == "Second kit"
+    )
+    window.options_preset_box.setCurrentText("Default")
+    assert window.preset_box.currentText() == "Default"
+    errors = []
+    monkeypatch.setattr(window, "error", errors.append)
+    monkeypatch.setattr(
+        QtWidgets.QInputDialog, "getText", lambda *a, **k: (" Custom sounds ", True)
+    )
+    window.new_sound_set()
+    assert len(window.settings.data["sets"]) == 2
+    assert "already exists" in errors[-1]
+    restored = Settings(tmp_path / "settings")
+    assert restored.data["sound_set"] == "Custom sounds"
+    assert restored.sample(pad["id"]) == imported
+    window.close()
+    application.processEvents()
